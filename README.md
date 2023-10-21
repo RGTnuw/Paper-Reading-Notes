@@ -1,5 +1,5 @@
-1.Convolutional Neural Networks for Sentence Classification
-===
+# 1.Convolutional Neural Networks for Sentence Classification #
+
 
 
 {2014}, {Yoon Kim}
@@ -78,8 +78,8 @@ Pennington, J., Socher, R., & Manning, C. (2014). Glove: Global vectors for word
 
 ----------
 
-2.Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling
-==
+# 2.Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling #
+
 {2014}, {Junyoung Chung，Caglar Gulcehre，KyungHyun Cho，Yoshua Bengio}
 
 {Chung J, Gulcehre C, Cho K H, et al. Empirical evaluation of gated recurrent neural networks on sequence modeling[J]. arXiv preprint arXiv:1412.3555, 2014.}
@@ -128,8 +128,7 @@ Gers F A, Schmidhuber J, Cummins F. Learning to forget: Continual prediction wit
 Cho K, Van Merriënboer B, Bahdanau D, et al. On the properties of neural machine translation: Encoder-decoder approaches[J]. arXiv preprint arXiv:1409.1259, 2014.
 
 ----------
-3.End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF
-==
+# 3.End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF #
 ACL2016
 Ma X, Hovy E. End-to-end sequence labeling via bi-directional lstm-cnns-crf[J]. arXiv preprint arXiv:1603.01354, 2016.
 ## Summary
