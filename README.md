@@ -109,6 +109,7 @@ LSTM (Long Short-Term Memory，长短期记忆网络)和GRU (Gated Recurrent Uni
 ## Evaluation
 三个unit:LSTM units, GRUs,tanh units
 在序列模型上比较，序列模型目标是学习一个序列的分布，在给定一个训练序列的集合下，计算它的最大似然估计：
+
 $$
 \max _{\boldsymbol{\theta}} \frac{1}{N} \sum_{n=1}^N \sum_{t=1}^{T_n} \log p\left(x_t^n \mid x_1^n, \ldots, x_{t-1}^n ; \boldsymbol{\theta}\right)
 $$
@@ -160,6 +161,7 @@ Ma X, Hovy E. End-to-end sequence labeling via bi-directional lstm-cnns-crf[J]. 
 表示和事先训练好的词向量拼接起来，输入Bi-directional LSTM，得到每个状态的表示。注意，BLSTM的输入和输出都过了Dropout层
 输出输入CRF层，最终预测。
 ![BLSTM](img/BLSTM.jpg)
+
 step1：CNN获取Character-level 的词表示(另一个word-level级别的表示用已经训练好的glove-100d的词向量)
 step2：将step1中CNN获得的字符级的嵌入和训练好的word embedding的字级别的嵌入联合输入到BLSTM，以获得过去和未来的上下文信息。
 step3：用CRF进行标注，联合解码输出最佳序列标注
@@ -268,6 +270,7 @@ Gehring J, Auli M, Grangier D, et al. Convolutional sequence to sequence learnin
 ## Method(s)
 模型结构
 ![HAN](img/HAN结构.jpg)
+
 结构组成：
 word encoder  （BiGRU layer）
 word attention （Attention layer）
@@ -365,7 +368,9 @@ Transformer的模型分为encoder和decoder两部分，即编码器和解码器�
 
 Transformer 中单词的输入表示 x由单词 Embedding 和位置 Embedding （Positional Encoding） 相加得到。
 位置编码公式如下
+
 ![6.位置编码](img/6.位置编码.jpg)
+
 pos 表示单词在句子中的位置，d 表示 PE的维度 (与词 Embedding 一样)，2i 表示偶数的维度，2i+1 表示奇数维度 (即 2i≤d, 2i+1≤d)。
 
 - 使 PE 能够适应比训练集里面所有句子更长的句子，假设训练集里面最长的句子为 20 个单词，当遇到 21 的句子，则使用公式计算的方法可以计算出第 21 位的 Embedding。
@@ -380,9 +385,7 @@ $$
 对每个映射后的查询、键和值，独立地计算注意力分数，通常是通过缩放点积注意力（Scaled Dot-Product Attention）来实现。
 缩放点积注意力通过计算查询和键的点积，然后除以一个缩放因子（通常是键的维度的平方根），最后应用softmax函数来确定值的权重。
 每个头的输出是其对应的值的加权和，然后这些输出被拼接起来，并通过另一个线性变换。
-$$
-\operatorname{Attention}(Q, K, V)=\operatorname{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V
-$$
+
 前馈神经网络（FeedForward）
 结构：
 Transformer中的前馈神经网络通常是一个简单的两层线性变换网络，中间有一个ReLU激活函数。
@@ -429,9 +432,13 @@ BERT是基于Transformer的深度双向语言表征模型，**本质上是利用
 模型结构
 -   BERT使用双向Transformer。OpenAI GPT使用从左到右的Transformer。ELMo使用独立训练的从左到右和从右到左lstm的连接来为下游任务生成特征。
 - BERT和OpenAI GPT是一种**Fine-tuning**方法，而ELMo是一种**Feature-based**的方法。
-![7.预训练微调过程](img/7.预训练微调过程.jpg)
+- 
+![7.预训练和微调过程](img/7.预训练和微调过程.jpg)
+
 针对不同的任务，BERT模型的输入可以是单句或者句对。**对于每一个输入的Token，它的表征由其对应的词表征（Token Embedding）、段表征（Segment Embedding）和位置表征（Position Embedding）相加产生**，如下图所示。
+
 ![7.2](img/7.2.jpg)
+
 对于英文模型，使用了Wordpiece模型来产生Subword从而减小词表规模；对于中文模型，直接训练基于字的模型。
 **模型输入需要附加一个起始Token，记为[CLS]，对应最终的Hidden State（即Transformer的输出）可以用来表征整个句子，用于下游的分类任务**。
 模型能够处理句间关系。为区别两个句子，用一个特殊标记符[SEP]进行分隔，另外针对不同的句子，将学习到的Segment Embeddings 加到每个Token的Embedding上。
@@ -505,7 +512,9 @@ RoBERTa则在整个过程中都采用max length=512。
 
 - 5）Batch size的提升
 实验效果如下表。可以看到batch size为8K时，模型的困惑度(ppl)最高，且准确率也有提升，故RoBERTa采用batch size为8K。
+
 ![8.1](img/8.1.jpg)
+
 - 6）编码方式的修改
 -文章选择用基于字节的编码方式(byte-level BPE)对文本进行编码。
 ## Evaluation
@@ -563,7 +572,7 @@ Transformer已成为神经语言建模最有效的神经网络结构。与按顺
 **自注意力解耦机制**
 
 用2个向量分别表示content 和 position，即word本身的文本内容和位置。word之间的注意力权重则使用word内容之间和位置之间的解耦矩阵。这是因为word之间的注意力不仅取决于其文本内容，还依赖于两者的相对位置。比如，对于单词"deep" 和 单词"learning"，当二者一起出现时，则它们之间的关系依赖性要比在不同的句子中出现时强得多。
-给定一个文本序列，对于第i个token分别用Hi和Pij表示文本向量和相对j位置的位置向量。那么token i，j之间的交叉注意力分数可以分解成4个部分：
+
 $$
 \begin{aligned}
 A_{i, j} & =\left\{\boldsymbol{H}_{\boldsymbol{i}}, \boldsymbol{P}_{\boldsymbol{i} \mid \boldsymbol{j}}\right\} \times\left\{\boldsymbol{H}_{\boldsymbol{j}}, \boldsymbol{P}_{\boldsymbol{j} \mid \boldsymbol{i}}\right\}^{\top} \\
@@ -571,7 +580,7 @@ A_{i, j} & =\left\{\boldsymbol{H}_{\boldsymbol{i}}, \boldsymbol{P}_{\boldsymbol{
 \end{aligned}
 $$
 
-token  i,j之间的注意力权重可以由内容和位置之间的解耦矩阵组成，
+tokeni,j之间的注意力权重可以由内容和位置之间的解耦矩阵组成，
 解耦的最终结果是4种注意力机制：
 
 -   内容-内容（content-to-content）
@@ -583,7 +592,7 @@ token  i,j之间的注意力权重可以由内容和位置之间的解耦矩阵�
 DeBERTa使用MLM进行预训练，训练一个模型使用MASK周围的单词来预测被MASK的单词应该是什么。其使用上下文词的内容和位置信息。解耦注意机制已经考虑了上下文单词的内容和相对位置，但没有考虑这些单词的绝对位置，在许多情况下，这些位置对预测也很重要。
 在DeBERTa中，作者在所有Transformer层之后，但在softmax层之前进行合并，以进行MASK预测。通过这种方式，DeBERTa捕获所有Transformer层中的相对位置，并且在解码MASK时仅使用绝对位置作为补充信息。因此，DeBERTa的解码组件称为增强型掩码解码器（EMD）
 
-**虚拟对抗训练方法 **
+**虚拟对抗训练方法**
 DeBERTa预训练里面引入的对抗训练叫SiFT，它攻击的对象不是word embedding，而是embedding之后的layer norm。
 规模不变微调(Scale-invariant-Fine-Tuning SiFT)算法一种新的虚拟对抗训练算法，用于模型的微调。虚拟对抗训练是一种改进模型泛化的正则化方法。 它通过对抗性样本提高模型的鲁棒性，对抗性样本是通过对输入进行细微扰动而创建的。 对模型进行正则化，以便在给出特定于任务的样本时，该模型产生的输出分布与该样本的对抗性扰动所产生的输出分布相同。
 
@@ -677,14 +686,18 @@ Prefix-Tuning难于训练，且预留给prompt的序列挤占了下游任务的�
 
 ## Method(s)
 模型方法
+
 $$
 \max _{\Theta} \sum_{(x, y) \in \mathcal{Z}} \sum_{t=1}^{|y|} \log \left(p_{\Phi_0+\Delta \Phi(\Theta)}\left(y_t \mid x, y_{<t}\right)\right)
 $$
+
 在原始预训练语言模型（PLM）旁边增加一个旁路，做一个降维再升维的操作，来模拟所谓的内在秩。
 训练的时候固定PLM的参数，只训练降维矩阵A与升维矩阵B。
 模型的输入输出维度不变，输出时将BA与PLM的参数叠加。
 用随机高斯分布初始化A，用0矩阵初始化B，保证训练的开始此旁路矩阵依然是0矩阵。
+
 ![11.1](img/11.1.jpg)
+
 如上图所示们对于某个线性层而言，左边是模型原有的参数，在训练过程中是冻结不变的，右边是lora方法增加的低秩分解矩阵。训练过程中，优化器只优化右边这一部分的参数，两边的矩阵会共用一个模型的输入，分别进行计算，最后将两边的计算结果相加作为模块的输出。不同于之前的参数高效微调的adapter，adapter是在模块的后面接上一个mlp，对模块的计算结果进行一个后处理，而lora是和模块的计算并行的去做一个mlp，和原来的模块共用一个输入。
 
 1. 低秩参数化的更新矩阵
