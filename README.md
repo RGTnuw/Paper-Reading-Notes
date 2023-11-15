@@ -275,15 +275,6 @@ sentence encoder  （BiGRU layer）
 sentence attention （Attention layer）
 
 词层面的“注意力”机制
-
-首先，将每个句子中的单词做embedding转换成词向量，然后，输入到双向GRU网络中，结合上下文的信息，获得该单词对应的隐藏状态输出
-$$
-\begin{aligned}
-x_{i t} & =W_e w_{i t}, t \in[1, T] \\
-\vec{h}_{i t} & =\overrightarrow{\operatorname{GRU}}\left(x_{i t}\right), t \in[1, T] \\
-\overleftarrow{h}_{i t} & =\overleftrightarrow{\operatorname{GRU}}\left(x_{i t}\right), t \in[T, 1]
-\end{aligned}
-$$
 首先，将每个句子中的单词做embedding转换成词向量，然后，输入到双向GRU网络中，结合上下文的信息，获得该单词对应的隐藏状态输出
 接着为了衡量单词的重要性，定义了一个随机初始化的单词层面上下文向量u_w计算其与句子中每个单词的相似度，然后经过一个softmax操作获得了一个归一化的attention权重矩阵a_it,代表句子i中第t个单词的权重,子的向量Si就可以看做是句子中单词的向量的加权求和
 $$
@@ -293,9 +284,7 @@ u_{i t} & =\tanh \left(W_w h_{i t}+b_w\right) \\
 s_i & =\sum_t \alpha_{i t} h_{i t} .
 \end{aligned}
 $$
-首先，通过一个线性层对双向RNN的输出进行变换，然后通过softmax公式计算出每个单词的重要性，最后通过对双向RNN的输出进行加权平均得到每个句子的表示。
-
-句层面的注意力机制
+通过一个线性层对双向RNN的输出进行变换，然后通过softmax公式计算出每个单词的重要性，最后通过对双向RNN的输出进行加权平均得到每个句子的表示。
 
 句层面的注意力模型和词层面的注意力模型类似。其计算公式如下所示：
 $$
@@ -346,3 +335,376 @@ weak conclusions：模型可以处理复杂的跨句上下文，并且可以根�
 1. A C-LSTM Neural Network for Text Classification( 2015, LSTM + CNN)
 2.  Document Modeling with Gated Recurrent Neural Network for Sentiment Classification( 2015, hierarchical structure, 提供yelp, IMDB数据集)
 3.  Character-level Convolutional Networks for Text Classification
+
+6.Attention Is All You Need
+==
+{Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017). Attention Is All You Need. http://arxiv.org/abs/1706.03762}
+## Summary
+
+序列转换模型主要基于是复杂的循环结构的RNN和CNN架构，通过其中的编码器Encoder和解码器Decoder来实现。而本文提出的Transformer完全摒弃了之前的循环和卷积操作，完全基于注意力机制，拥有更强的并行能力，训练效率也得到较高提升。
+
+
+
+## Background / Problem Statement
+
+在Transformer提出以前，主流的NLP模型包括RNN、LSTM、GRU等，这些模型有以下缺点：
+
+- 难以并行
+
+
+- 时序中过早的信息容易被丢弃
+
+
+- 内存开销大
+
+由于这些网络都是由前往后一步步计算的，当前的状态不仅依赖当前的输入，也依赖于前一个状态的输出。即对于网络中的第个t状态，与前t-1个状态都有关，使得网络必须一步一步计算；当较为重要的信息在较早的时序中进入网络时，多次传播过程中可能保留很少甚至被丢弃；从另一角度来考虑，即使重要的信息没有被丢弃，而是随着网络继续传递，会造成内存的冗余，导致开销过大。
+
+## Method(s)
+Transformer的模型分为encoder和decoder两部分，即编码器和解码器两部分。对于原始输入(x1,x2,…,xn)，编码器将其转化为机器可理解的向量(z1,z2,…,zn)，解码器将编码器的输出作为输入，进而生成最终的解码结果(y1,y2,…,yn)。其模型结构如下图所示：
+![Transformer](img/Transformer.jpg)
+
+Transformer 中单词的输入表示 x由单词 Embedding 和位置 Embedding （Positional Encoding） 相加得到。
+位置编码公式如下
+![6.位置编码](img/6.位置编码.jpg)
+pos 表示单词在句子中的位置，d 表示 PE的维度 (与词 Embedding 一样)，2i 表示偶数的维度，2i+1 表示奇数维度 (即 2i≤d, 2i+1≤d)。
+
+- 使 PE 能够适应比训练集里面所有句子更长的句子，假设训练集里面最长的句子为 20 个单词，当遇到 21 的句子，则使用公式计算的方法可以计算出第 21 位的 Embedding。
+
+- 可以让模型容易地计算出相对位置，对于固定长度的间距 k，PE(pos+k) 可以用 PE(pos) 计算得到。因为 Sin(A+B) = Sin(A)Cos(B) + Cos(A)Sin(B), Cos(A+B) = Cos(A)Cos(B) Sin(A)Sin(B)。
+
+Multi-attention（self attention）
+在多头注意力机制中，首先将输入的查询（Query）、键（Key）和值（Value）通过不同的线性变换映射到多个空间。
+$$
+\operatorname{Attention}(Q, K, V)=\operatorname{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V
+$$
+对每个映射后的查询、键和值，独立地计算注意力分数，通常是通过缩放点积注意力（Scaled Dot-Product Attention）来实现。
+缩放点积注意力通过计算查询和键的点积，然后除以一个缩放因子（通常是键的维度的平方根），最后应用softmax函数来确定值的权重。
+每个头的输出是其对应的值的加权和，然后这些输出被拼接起来，并通过另一个线性变换。
+$$
+\operatorname{Attention}(Q, K, V)=\operatorname{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V
+$$
+前馈神经网络（FeedForward）
+结构：
+Transformer中的前馈神经网络通常是一个简单的两层线性变换网络，中间有一个ReLU激活函数。
+第一层将输入映射到一个更高维的空间，第二层则将其映射回原始维度。
+作用：
+这个前馈网络对每个位置的表示进行独立处理，但是对于不同位置是相同的（即它不考虑序列中的位置信息）。增加了模型的非线性，使得模型能够学习更复杂的特征。
+## Evaluation
+
+测试了“英语-德语”和“英语-法语”两项翻译任务。使用论文的默认模型配置，在8张P100上只需12小时就能把模型训练完。本工作使用了Adam优化器，并对学习率调度有一定的优化。模型有两种正则化方式：1）每个子层后面有Dropout，丢弃概率0.1；2）标签平滑（Label Smoothing）。Transformer在翻译任务上胜过了所有其他模型，且训练时间大幅缩短。
+
+## Conclusion
+Transformer模型在机器翻译任务中表现出色，能够提供更高的质量和更快的训练速度。此外，模型在其他任务（如英语成分解析）上也表现出良好的泛化能力。
+
+## Notes
+
+Transformer的特性：
+
+优点：
+(1) 每一层的计算复杂度比较低
+(2) 比较利于并行计算
+(3) 模型可解释性比较高（不同单词之间的相关性有多大）
+Transformer的设计最大的带来性能提升的关键是将任意两个单词的距离是1，这对解决NLP中棘手的长期依赖问题是非常有效的
+缺点：
+Transformer失去的位置信息其实在NLP中非常重要，而论文中在特征向量中加入Position Embedding也只是一个权宜之计，并没有改变Transformer结构上的固有缺陷。
+
+7.BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding
+==
+## Summary
+
+当前的预训练模型主要分为基于特征和微调两大类，但它们大都基于单向的语言模型来进行语言学习表征，这使得许多句子级别的下游任务无法达到最优的训练效果。因此，本文提出了名为BERT的双向预训练表征模型，很大程度上缓解了单向模型带来的约束。同时，引入了“完形填空”和“上下句匹配”分别作为单词级别和句子级别的两大通用任务，对BERT模型进行训练。实验表明， BERT模型的应用使得当前的11个NLP任务均取得了SOTA的效果。
+
+## Research Objective(s)
+
+开发一种新的语言表示模型BERT，它通过深度双向训练，从无标记文本中提取语言特征，以改善各种自然语言处理任务的性能。
+
+## Background / Problem Statement
+
+在自然语言处理领域，现有的语言模型不足以充分利用双向语境信息。作者旨在解决这一问题，提高模型对于语言理解的深度和准确性。
+
+## Method(s)
+
+BERT，一种基于“Transformer”架构的模型，它使用“masked language model”(MLM)和“next sentence prediction”(NSP)两种预训练任务。这种方法是在先前的语言模型如OpenAI GPT和ELMo的基础上发展而来的。
+BERT是基于Transformer的深度双向语言表征模型，**本质上是利用Transformer结构构造了一个多层双向的Encoder网络**
+模型结构
+-   BERT使用双向Transformer。OpenAI GPT使用从左到右的Transformer。ELMo使用独立训练的从左到右和从右到左lstm的连接来为下游任务生成特征。
+- BERT和OpenAI GPT是一种**Fine-tuning**方法，而ELMo是一种**Feature-based**的方法。
+![7.预训练微调过程](img/7.预训练微调过程.jpg)
+针对不同的任务，BERT模型的输入可以是单句或者句对。**对于每一个输入的Token，它的表征由其对应的词表征（Token Embedding）、段表征（Segment Embedding）和位置表征（Position Embedding）相加产生**，如下图所示。
+![7.2](img/7.2.jpg)
+对于英文模型，使用了Wordpiece模型来产生Subword从而减小词表规模；对于中文模型，直接训练基于字的模型。
+**模型输入需要附加一个起始Token，记为[CLS]，对应最终的Hidden State（即Transformer的输出）可以用来表征整个句子，用于下游的分类任务**。
+模型能够处理句间关系。为区别两个句子，用一个特殊标记符[SEP]进行分隔，另外针对不同的句子，将学习到的Segment Embeddings 加到每个Token的Embedding上。
+对于单句输入，只有一种Segment Embedding；对于句对输入，会有两种Segment Embedding。
+
+MLM
+通过随机掩盖一些词（替换为统一标记符**[MASK]**），**然后预测这些被遮盖的词来训练双向语言模型，并且使每个词的表征参考上下文信息**（**完型填空**）。这样做会产生两个缺点：
+1.  会造成预训练和微调时的不一致，因为在微调时[MASK]总是不可见的；
+2.  由于每个Batch中只有15%的词会被预测，因此模型的收敛速度比起单向的语言模型会慢，训练花费的时间会更长。对于第一个缺点的解决办法是，**把80%需要被替换成[MASK]的词进行替换，10%的随机替换为其他词，10%保留原词**。由于Transformer Encoder并不知道哪个词需要被预测，哪个词是被随机替换的，这样就强迫每个词的表达需要参照上下文信息。对于第二个缺点目前没有有效的解决办法，但是从提升收益的角度来看，付出的代价是值得的。
+
+NSP
+-   为了训练一个理解句子间关系的模型，引入一个下一句预测任务。这一任务的训练语料可以从语料库中抽取句子对包括两个句子A和B来进行生成，**其中50%的概率B是A的下一个句子，50%的概率B是语料中的一个随机句子。**NSP任务预测B是否是A的下一句。NSP的目的是获取句子间的信息，这点是语言模型无法直接捕捉的。
+-   Google的论文结果表明，这个简单的任务对问答和自然语言推理任务十分有益，但是后续一些新的研究发现，去掉NSP任务之后模型效果没有下降甚至还有提升。我们在预训练过程中也发现NSP任务的准确率经过1-2个Epoch训练后就能达到98%-99%，去掉NSP任务之后对模型效果并不会有太大的影响。
+
+
+## Evaluation
+本文将BERT模型迁移至11个NLP基准任务上进行了微调训练，均取得了SOTA的效果。另外，为了探究模型的不同组成部分对整体性能的影响，本文还进行了若干消融实验，对BERT的预训练任务、模型规模等要素进行了实验评估，充分论证了双向模型的重要性。
+
+评估方法包括在多个标准的自然语言处理任务上测试BERT的性能，如GLUE、MultiNLI和SQuAD等。实验设置涉及使用不同大小的BERT模型进行对比。
+
+## Conclusion
+实验结果显示BERT在所有测试任务中取得了新的最佳性能。
+提升了GLUE分数7.7%，Multiv提升了4.6%，SQuAD v1.1任务上提升了1.5%，SQuAD v2.0任务提升了5.1%。
+BERT显著提高了自然语言处理任务的性能。强有力的结论是双向预训练对于理解语言非常重要。相对较弱的结论可能涉及BERT在特定任务上的适用性，因为这些可能需要进一步的专门调整和验证。
+
+## Notes
+
+-   贡献
+    -   证明深度双向预训练语言模型的重要性，
+    -   采用pre-training fine-tuning的结构，预先训练的表示免去了许多工程任务需要针对特定任务修改体系架构的需求。 BERT是第一个基于微调的表示模型，它在大量的句子级和token级任务上实现了最先进的性能，强于许多面向特定任务体系架构的系统。直接带动了pretrain+finetune的预训练模型的时代
+    -   BERT刷新了许多NLP任务的性能记录。
+
+## References
+
+[Deep Contextualized Word Representations](https://aclanthology.org/N18-1202) (Peters et al., NAACL 2018)
+
+
+8.RoBERTa: A Robustly Optimized BERT Pretraining Approach
+==
+## Summary
+
+对BERT预训练进行了详细研究，识别了关键的设计选择和训练策略，显著提高了性能。作者引入了RoBERTa，这是BERT的优化版本，在主要基准测试中的性能超过了现有模型，而无需依赖多任务微调或额外数据。作者强调了训练持续时间、批量大小、数据集大小和掩码模式的重要性，揭示了这些经常被忽视的因素对模型性能至关重要。
+
+## Research Objective(s)
+
+通过仔细检查各种超参数和训练数据大小，增强对BERT预训练的理解，并提高其性能。
+
+## Background / Problem Statement
+
+语言模型预训练的复杂性和计算成本，以及由于数据集和超参数的变化，比较不同模型的挑战。问题是确定BERT训练过程中最有影响的因素，以优化其性能。
+
+## Method(s)
+- 1）模型架构的优化
+RoBERTa的基本架构和BERT相同，超参数也基本采用BERT原文的超参数，除了warmup步数(w)和peak learning rate(peak lr)。warm up，即模型训练最开始的时候一般不稳定，所以令学习率lr很小，尤其是针对test数据集上损失较高的情况可采用warm up策略，防止基于mini-batch的训练过早的过拟合。在一段时间后模型的lr会趋于稳定达到peak lr然后再下降。再次下降是因为模型平稳之后不希望再被mini-batch的数据影响太多。BERT原文采用的w为10000步，peak lr为1e-4，而RoBERTa（large）采用w为30K，peak lr为4e-4。除此之外，RoBERTa选择Adam的β2 = 0.98，当batch size比较大的时候更加稳定
+RoBERTa则在整个过程中都采用max length=512。
+
+
+- 2）数据集的增强
+文章认为预训练的数据集越大，下游任务表现越好，据此，文章尽可能地搜集更多数据进行预训练，从五个不同领域的英语语料库中收集共160GB的数据集。
+
+- 3）掩码方法的优化
+为了避免每个epoch模型采用相同的掩码，文章提出
+1-静态掩码策略（static masking）：将训练数据复制10份，每个句子都采用10次不同的mask，这样40epochs之后，每个句子都有4次相同的mask。
+2-动态掩码策略（dynamic masking）：每个句子每次用于训练时均生成不同的mask
+
+- 4）训练目标的调整
+**Segment-pair+NSP**：采用NSP损失。每个输入都是一对文本，每个文本可能包含多个自然语句，总长度不超过512。
+**Sentence-pair+NSP**：采用NSP损失。每个输入都是一对句子，一般来说每个句子的长度远小于512，从而在该实验中增加了batch size以保证每次训练的token数和其它任务相近。
+**Full-Sentences**：不采用NSP损失。每个输入都是从一个或者多个文档中连续采样的完整句子，满足总长度不超过512。如果当前采样到某文档的结尾，但句子总长度低于512，则从其它文档基于采样句子增加至当前文档，两个文档之间用特殊分隔符表示。
+**Doc-Sentences**：不采用NSP损失。类似Full-Sentences，只是不跨越文档。但不
+
+- 5）Batch size的提升
+实验效果如下表。可以看到batch size为8K时，模型的困惑度(ppl)最高，且准确率也有提升，故RoBERTa采用batch size为8K。
+![8.1](img/8.1.jpg)
+- 6）编码方式的修改
+-文章选择用基于字节的编码方式(byte-level BPE)对文本进行编码。
+## Evaluation
+
+比较了RoBERTa与BERT和其他模型的性能。
+参数设置上基本等同于bert，除了Peak learning rate和warmup steps。max-length=512，和bert不同的是，roberta没有像bert一样为了加速训练，90%的更新时使用缩短后的序列（max-length=128），而是用完整长度的序列。
+
+数据
+
+Robert的实验中共涉及了5种不同领域的英文语料，共160G：
+
+1）BOOKCORPUS+English WIKIPEDIA (Bert的语料)。16GB
+
+2) CC-NEWS CommonCrawl News dataset的英文部分。76GB
+
+3）OPENWEBTEXT WebText语料库的开源再造（来自于Reddit）。38GB
+
+4） STORIES 也来自于CommonCrawl，故事风格的文本子集。31GB
+
+评价指标：GLUE， SQuAD，RACE
+
+## Conclusion
+
+BERT显著提高了自然语言处理任务的性能。强有力的结论是双向预训练对于理解语言非常重要。文章通过大量数值试验证明，BERT仍有很多优化的空间，包括超参数的调节、数据量的增加和训练目标的调整等。RoBERTa在包括QA、SST、NLI等下游任务中达到了SOTA表现。同样，未来也可以通过增强数据和模型参数量等方式对RoBERTa进行进一步的优化。
+
+## Notes
+
+本文贡献：
+
+出了一套重要的BERT设计选择和训练策略，并引入了能够提高下游任务绩效的备选方案
+
+使用了一个新的数据集，CCNEWS，并确认使用更多的数据进行预训练进一步提高了下游任务的性能
+
+训练改进表明，在正确的设计选择下，masked language model的预训练可以与所有其他最近发表的方法相媲美
+
+9.DeBERTa: Decoding-enhanced BERT with Disentangled Attention
+==
+## Summary
+
+文章提出了两种改进BERT预训练的方法：
+第一种是注意解耦机制，该机制将一个单词的表征由单词的内容和位置编码组成，并使用解耦矩阵计算单词之间在内容和相对位置上的注意力权重；
+第二种是引入一个增强的掩码解码器(EMD)，它取代原有输出的Softmax来预测用于MLM预训练的被mask掉的token。使用这两种技术，新的预训练语言模型DeBERTa在许多下游NLP任务上的表现都优于RoBERTa和BERT。DeBERTa这项工作展示了探索自注意的词表征解耦以及使用任务特定解码器改进预训练语言模型的潜力。
+
+## Research Objective(s)
+
+作者的目标是通过提出一种新的模型架构DeBERTa，通过解耦注意力和增强的掩码解码器增强BERT和RoBERTa模型，以提高自然语言处理（NLP）任务的性能。
+
+## Background / Problem Statement
+
+Transformer已成为神经语言建模最有效的神经网络结构。与按顺序处理文本的递归神经网络（RNN）不同，Transformers应用自注意并行计算输入文本中的每个单词的注意权重，衡量每个单词对另一个单词的影响，因此在大规模语言模型(PLM)训练中允许比RNN更多的并行化。自2018年以来，出现了一系列基于Transformer的大规模预训练语言模型，如GPT，BERT，RoBERTa，UNILM，ELECTRA，T5，ALUM，StructBERT，ERNIE。
+解决现有基于Transformers的预训练语言模型（PLMs）在NLP任务中的局限性。作者旨在提高模型预训练的效率和自然语言理解（NLU）及生成（NLG）任务的性能。
+
+## Method(s)
+
+**自注意力解耦机制**
+
+用2个向量分别表示content 和 position，即word本身的文本内容和位置。word之间的注意力权重则使用word内容之间和位置之间的解耦矩阵。这是因为word之间的注意力不仅取决于其文本内容，还依赖于两者的相对位置。比如，对于单词"deep" 和 单词"learning"，当二者一起出现时，则它们之间的关系依赖性要比在不同的句子中出现时强得多。
+给定一个文本序列，对于第i个token分别用Hi和Pij表示文本向量和相对j位置的位置向量。那么token i，j之间的交叉注意力分数可以分解成4个部分：
+$$
+\begin{aligned}
+A_{i, j} & =\left\{\boldsymbol{H}_{\boldsymbol{i}}, \boldsymbol{P}_{\boldsymbol{i} \mid \boldsymbol{j}}\right\} \times\left\{\boldsymbol{H}_{\boldsymbol{j}}, \boldsymbol{P}_{\boldsymbol{j} \mid \boldsymbol{i}}\right\}^{\top} \\
+& =\boldsymbol{H}_{\boldsymbol{i}} \boldsymbol{H}_{\boldsymbol{j}}^{\top}+\boldsymbol{H}_{\boldsymbol{i}} \boldsymbol{P}_{\boldsymbol{j} \mid \boldsymbol{i}}^{\top}+\boldsymbol{P}_{\boldsymbol{i} \mid \boldsymbol{j}} \boldsymbol{H}_{\boldsymbol{j}}^{\top}+\boldsymbol{P}_{\boldsymbol{i} \mid \boldsymbol{j}} \boldsymbol{P}_{\boldsymbol{j} \mid \boldsymbol{i}}^{\top}
+\end{aligned}
+$$
+
+token  i,j之间的注意力权重可以由内容和位置之间的解耦矩阵组成，
+解耦的最终结果是4种注意力机制：
+
+-   内容-内容（content-to-content）
+-   内容-位置（content-to-position）
+-   位置-内容（position-to-content）
+-   位置-位置（position-to-position）
+
+**增强的掩码解码器**
+DeBERTa使用MLM进行预训练，训练一个模型使用MASK周围的单词来预测被MASK的单词应该是什么。其使用上下文词的内容和位置信息。解耦注意机制已经考虑了上下文单词的内容和相对位置，但没有考虑这些单词的绝对位置，在许多情况下，这些位置对预测也很重要。
+在DeBERTa中，作者在所有Transformer层之后，但在softmax层之前进行合并，以进行MASK预测。通过这种方式，DeBERTa捕获所有Transformer层中的相对位置，并且在解码MASK时仅使用绝对位置作为补充信息。因此，DeBERTa的解码组件称为增强型掩码解码器（EMD）
+
+**虚拟对抗训练方法 **
+DeBERTa预训练里面引入的对抗训练叫SiFT，它攻击的对象不是word embedding，而是embedding之后的layer norm。
+规模不变微调(Scale-invariant-Fine-Tuning SiFT)算法一种新的虚拟对抗训练算法，用于模型的微调。虚拟对抗训练是一种改进模型泛化的正则化方法。 它通过对抗性样本提高模型的鲁棒性，对抗性样本是通过对输入进行细微扰动而创建的。 对模型进行正则化，以便在给出特定于任务的样本时，该模型产生的输出分布与该样本的对抗性扰动所产生的输出分布相同。
+
+对于之前的NLP任务，一般会把扰动应用于单词嵌入，而不是原始单词序列。 但是嵌入向量值的范围在不同的单词和模型之间有所不同。 对于具有数十亿个参数的较大模型，方差会变大，从而导致对抗训练有些不稳定。
+
+受层归一化的启发，文章提出了SiFT算法，该算法通过应用扰动的归一化词嵌入来提高训练稳定性。 即在实验中将DeBERTa微调到下游NLP任务时，SiFT首先将单词嵌入向量归一化为随机向量，然后将扰动应用于归一化的嵌入向量。 实验表明，归一化大大改善了微调模型的性能。
+## Evaluation
+**Large和Base**
+**消融研究**
+为量化不同部分在 DeBERTa 中的贡献程度，文章进行了消融研究。文章设计了三种DeBERTa变体：
+
+EMD：没有 EMD 的 DeBERTa 模型。
+C2P：没有content-to-position这一项的 DeBERTa 模型。
+P2C：没有position-to-content这一项的 DeBERTa 模型。 由于 XLNet 也使用相对位置，所以该模型近似等同于XLNet+EMD。
+
+## Conclusion
+RoBERTa 和 RoBERTa-ReImp base，在所有四个基准数据集上的表现相似。因此，RoBERTa-ReImp 作为一个坚实的baseline是可靠的。
+缺失DeBERTa中的任何一个部分，在所有基准测试的性能都会下降。比如，去掉 EMD(即-EMD)，那么将带来以下的性能下降：
+RACE下降1.4% (71.7% vs 70.3%)
+SQuAD v1.1下降 0.3% (92.1% vs 91.8%)
+SQuAD v2.0下降1.2%（82.5% vs 81.3%）
+MNLI-m/mm分别下降0.2% (86.3% vs 86.1%)和0.1% (86.2% vs 86.1%)。
+类似地，删除content-to-position 或position-to-content都会导致在所有基准任务下的性能下降。正如预期的那样，同时去掉content-to-position 和position-to-content则会导致更严重的性能退化。
+
+## Notes
+
+DeBERTa V1 相比 BERT 和 RoBERTa 模型的改进：
+
+-   两种技术改进：
+    -   注意力解耦机制
+    -   增强的掩码解码器
+-   新的微调方法：虚拟对抗训练方法(SiFT)
+
+
+10.DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing
+==
+## Summary
+
+文章介绍了一种新的预训练语言模型DeBERTaV3，通过替换原始DeBERTa模型中的掩码语言建模（MLM）任务为更有效的替换标记检测（RTD）任务来改进。文章分析了ELECTRA中的标准嵌入共享对训练效率和模型性能的负面影响，并提出了一种新的梯度解耦嵌入共享方法，旨在提高训练效率和预训练模型的质量。DeBERTaV3在多个下游自然语言理解（NLU）任务中展现出卓越性能，如GLUE基准上的DeBERTaV3 Large模型达到91.37%的平均分数，超过DeBERTa和ELECTRA，设定了类似结构模型的新标准。此外，多语言模型mDeBERTaV3也在XNLI等基准测试中实现显著提升。
+
+## Research Objective(s)
+
+作者的研究目标是通过改进原始DeBERTa模型，探索更高效的预训练语言模型方法。通过引入替换标记检测（RTD）和新的梯度解耦嵌入共享方法，提升模型在自然语言理解任务中的性能和训练效率。
+
+## Background / Problem Statement
+
+作者提出，尽管通过增加参数规模可以提升预训练语言模型（PLM）的能力，更重要的是探索更为高效的方法来构建具有较少参数和计算成本的PLM，同时保持高模型容量。文章针对的主要问题是如何提升预训练模型的效率和性能。
+
+## Method(s)
+DeBERTaV3
+1. 生成器的宽度和鉴别器一样但是深度只有一半
+2. DeBERTaV3 significantly outperforms DeBERTa, i.e., +2.5% on the MNLI-m accuracy and +3.8% on the SQuAD v2.0 F1.
+3. MLM和RTD：相当于是多任务学习，但是差异过大，导致将embedding推到不同的方向
+不同的嵌入共享方法：
+![10.1](img/10.1.jpg)
+4. MLM：token->相同语义放到一起->找到相同语义的词
+5. RTD: token->从相同语义里面来区分相似的token->分类精度
+
+## Evaluation
+1. 大模型对比
+low resource task提升大，RTE+4.4%，CoLA+4.8%，说明DeBERTav3在同样的数据情况下，更有效。sts任务提升不大.
+2. 小模型对比
+base模型，MNLI-m任务：90.6 vs 84， squad： 88 vs 76.3
+small：+6.4%提升
+3. 跨语言模型
+作者通过在多个NLU基准测试中评估DeBERTaV3模型来验证方法的有效性，例如GLUE、MNLI和SQuAD v2.0。结果显示，DeBERTaV3在多数任务中取得了显著提升，其中DeBERTaV3 Large模型在GLUE基准测试中的平均分数超过了之前的最佳模型。此外，多语言模型mDeBERTaV3在XNLI测试中也展现了较强的跨语言迁移能力。
+
+## Conclusion
+
+通过结合DeBERTa和ELECTRA的优势并引入GDES，可以显著提高PLM的训练效率和性能。DeBERTaV3模型在多种NLU任务中都设定了新的性能标准，证明了改进预训练语言模型的巨大潜力。
+
+## References
+Kevin Clark, Minh-Thang Luong, Quoc V. Le, and Christopher D. Manning. ELECTRA: Pre-training text encoders as discriminators rather than generators. In ICLR, 2020.
+
+11.LoRA: Low-Rank Adaptation of Large Language Models
+==
+## Summary
+
+论文提出了一种新的大型语言模型调整方法，名为低秩适应（LoRA）。LoRA 的关键思想是在保持预训练模型权重不变的情况下，通过注入可训练的秩分解矩阵到 Transformer 架构的每一层中，显著减少用于下游任务的可训练参数数量。使用 GPT-3 175B 作为例子，LoRA 能够将可训练参数数量减少 10,000 倍，GPU 内存需求减少 3 倍。与完全微调 GPT-3 175B 相比，LoRA 在训练参数更少的情况下，模型质量上相当或更好，
+
+## Research Objective(s)
+
+提出一种新的大型语言模型调整方法，以提高训练效率并减少部署成本，同时保持或提升模型性能。
+
+## Background / Problem Statement
+
+为解决微调大规模语言模型到不同领域和任务的挑战，已有多种方案，比如部分微调、使用adapters和prompting。但这些方法存在如下问题：
+Adapters引入额外的推理延迟 (由于增加了模型层数)
+Prefix-Tuning难于训练，且预留给prompt的序列挤占了下游任务的输入序列空间，影响模型性能
+大型预训练语言模型虽然在多种下游任务中表现出色，但它们的完全微调（即重新训练所有模型参数）在实际应用中变得越来越不可行。特别是对于像 GPT-3 这样的大型模型，部署独立的微调模型实例（每个都有 175B 参数）成本过高。
+
+## Method(s)
+模型方法
+$$
+\max _{\Theta} \sum_{(x, y) \in \mathcal{Z}} \sum_{t=1}^{|y|} \log \left(p_{\Phi_0+\Delta \Phi(\Theta)}\left(y_t \mid x, y_{<t}\right)\right)
+$$
+在原始预训练语言模型（PLM）旁边增加一个旁路，做一个降维再升维的操作，来模拟所谓的内在秩。
+训练的时候固定PLM的参数，只训练降维矩阵A与升维矩阵B。
+模型的输入输出维度不变，输出时将BA与PLM的参数叠加。
+用随机高斯分布初始化A，用0矩阵初始化B，保证训练的开始此旁路矩阵依然是0矩阵。
+![11.1](img/11.1.jpg)
+如上图所示们对于某个线性层而言，左边是模型原有的参数，在训练过程中是冻结不变的，右边是lora方法增加的低秩分解矩阵。训练过程中，优化器只优化右边这一部分的参数，两边的矩阵会共用一个模型的输入，分别进行计算，最后将两边的计算结果相加作为模块的输出。不同于之前的参数高效微调的adapter，adapter是在模块的后面接上一个mlp，对模块的计算结果进行一个后处理，而lora是和模块的计算并行的去做一个mlp，和原来的模块共用一个输入。
+
+1. 低秩参数化的更新矩阵
+低秩矩阵是指其秩（即线性无关的行或列的最大数目）远小于矩阵的维度。在LoRA中，一个高维权重矩阵的更新不是直接修改整个矩阵，而是通过两个较小的矩阵的乘积来表示。这两个小矩阵的乘积构成了原始矩阵的一个低秩近似。
+例如，假设有一个d×d的权重矩阵，直接学习或调整这个矩阵需要
+d^2个参数。但是，如果使用两个d×r和r×d的矩阵（其中r远小于d）的乘积来近似这个更新，那么只需要2dr个参数，大大减少了参数量。
+2. 将LoRA应用于Transformer
+将LoRA应用于Transformer时，我们不是直接修改Transformer的权重，而是引入额外的低秩矩阵来调整这些权重。这些低秩矩阵在原始Transformer模型的基础上提供了微调的能力，使得模型可以适应新的任务或数据集，同时保持了大部分预训练权重不变。
+在实践中，这意味着对于Transformer中的每个权重矩阵（例如，在自注意力层和前馈网络中），我们引入一对低秩矩阵。这些矩阵在训练过程中学习，以优化模型在特定任务上的表现。由于这些矩阵的秩较低，因此增加的参数数量相对较少，使得LoRA成为一种高效的微调方法。
+
+## Evaluation
+
+作者通过在不同的下游任务（如 RoBERTa、DeBERTa、GPT-2 和 GPT-3）上评估 LoRA 的性能来验证其有效性。
+
+## Conclusion
+
+研究表明，LoRA 是一种有效的大型语言模型适应策略，可以显著减少可训练参数数量和GPU内存需求，同时保持高模型质量。这使得大型模型的部署更加可行，特别是在资源受限的情况下。
+
+**对rank的选择**
+实验结果显示，对于一般的任务，r=1,2,4,8就足够了。而一些领域差距比较大的任务可能需要更大的r。
+## Notes
+总的来说，基于大模型的内在低秩特性，增加旁路矩阵来模拟full finetuning，LoRA是一个能达成lightweight finetuning的简单有效的方案。目前该技术已经广泛应用于大模型的微调，如Alpaca，stable diffusion+LoRA，而且能和其它参数高效微调方法有效结合，例如 State-of-the-art Parameter-Efficient Fine-Tuning (PEFT)
+
